@@ -27,6 +27,7 @@ tm unixTime(DWORD dwTime) {
     return timeInfo;
 }
 
+#ifdef _WIN64
 uintptr_t rvaToFileOffset(uintptr_t RVA, PIMAGE_NT_HEADERS& pNtHeader) {
     if (!pNtHeader) return 0;
 
@@ -42,27 +43,64 @@ uintptr_t rvaToFileOffset(uintptr_t RVA, PIMAGE_NT_HEADERS& pNtHeader) {
 
     return 0;
 }
+#else
+DWORD rvaToFileOffset(DWORD RVA, PIMAGE_NT_HEADERS& pNtHeader) {
+    if (!pNtHeader) return 0;
+
+    PIMAGE_FILE_HEADER fileHdr       = &pNtHeader->FileHeader;
+    PIMAGE_SECTION_HEADER sectionHdr = IMAGE_FIRST_SECTION(pNtHeader);
+
+    for (int i = 0; i < fileHdr->NumberOfSections; i++) {
+        DWORD sectionVA   = sectionHdr[i].VirtualAddress;
+        DWORD sectionSize = sectionHdr[i].SizeOfRawData;
+
+        if (RVA >= sectionVA && RVA < sectionVA + sectionSize) return RVA - sectionVA + sectionHdr[i].PointerToRawData;
+    }
+
+    return 0;
+}
+#endif  // _WIN64
 
 void readImports(PEHeaders& header) {
-    PIMAGE_IMPORT_DESCRIPTOR importDesc = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(
+    PIMAGE_IMPORT_DESCRIPTOR importDesc;
+#ifdef _WIN64
+    importDesc = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(
         reinterpret_cast<uintptr_t>(header.dosHdr) +
         rvaToFileOffset(header.optionalHdr->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress, header.ntHdr));
+#else
+    importDesc = reinterpret_cast<PIMAGE_IMPORT_DESCRIPTOR>(
+        reinterpret_cast<DWORD>(header.dosHdr) + rvaToFileOffset(header.optionalHdr->DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT].VirtualAddress, header.ntHdr));
+#endif  // _WIN64
 
     console->log(LogLevel::lightcyan, "[Import Directory Table]\n");
     for (; importDesc->Name != 0; importDesc++) {
-        const char* moduleName = reinterpret_cast<const char*>(reinterpret_cast<uintptr_t>(header.dosHdr) + rvaToFileOffset(importDesc->Name, header.ntHdr));
-        console->log(LogLevel::orange, "  %s:\n", moduleName);
-
-        PIMAGE_THUNK_DATA oThunkData =
+        const char* moduleName;
+        PIMAGE_THUNK_DATA oThunkData;
+#ifdef _WIN64
+        moduleName = reinterpret_cast<const char*>(reinterpret_cast<uintptr_t>(header.dosHdr) + rvaToFileOffset(importDesc->Name, header.ntHdr));
+        oThunkData =
             reinterpret_cast<PIMAGE_THUNK_DATA>(reinterpret_cast<uintptr_t>(header.dosHdr) + rvaToFileOffset(importDesc->OriginalFirstThunk, header.ntHdr));
+#else
+        moduleName = reinterpret_cast<const char*>(reinterpret_cast<DWORD>(header.dosHdr) + rvaToFileOffset(importDesc->Name, header.ntHdr));
+        oThunkData =
+            reinterpret_cast<PIMAGE_THUNK_DATA>(reinterpret_cast<DWORD>(header.dosHdr) + rvaToFileOffset(importDesc->OriginalFirstThunk, header.ntHdr));
+#endif  // _WIN64
+
+        console->log(LogLevel::orange, "  %s:\n", moduleName);
 
         for (; oThunkData->u1.AddressOfData != 0; oThunkData++) {
             if (IMAGE_SNAP_BY_ORDINAL(oThunkData->u1.Ordinal)) {
                 console->log("    %u\n", IMAGE_ORDINAL(rvaToFileOffset(oThunkData->u1.Ordinal, header.ntHdr)));
 
             } else {
-                PIMAGE_IMPORT_BY_NAME functionName = reinterpret_cast<PIMAGE_IMPORT_BY_NAME>(reinterpret_cast<uintptr_t>(header.dosHdr) +
-                                                                                             rvaToFileOffset(oThunkData->u1.Function, header.ntHdr));
+                PIMAGE_IMPORT_BY_NAME functionName;
+#ifdef _WIN64
+                functionName = reinterpret_cast<PIMAGE_IMPORT_BY_NAME>(reinterpret_cast<uintptr_t>(header.dosHdr) +
+                                                                       rvaToFileOffset(oThunkData->u1.Function, header.ntHdr));
+#else
+                functionName =
+                    reinterpret_cast<PIMAGE_IMPORT_BY_NAME>(reinterpret_cast<DWORD>(header.dosHdr) + rvaToFileOffset(oThunkData->u1.Function, header.ntHdr));
+#endif  // _WIN64
                 console->log("    %s\n", functionName->Name);
             }
         }
@@ -115,7 +153,7 @@ void readHeaders(inFile& inputFile) {
 
     console->log(LogLevel::green, "[sections] -> %d\n", static_cast<int>(inputFile.header.fileHdr->NumberOfSections));
     for (WORD i = 0; i < inputFile.header.fileHdr->NumberOfSections; i++)
-        console->log("%s -> 0x%X\n", inputFile.header.sectionHdr[i], inputFile.header.sectionHdr[i]);
+        console->log("%s -> 0x%X\n", inputFile.header.sectionHdr[i].Name, inputFile.header.sectionHdr[i].Name);
 
     console->log("\n");
 
