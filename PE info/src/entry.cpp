@@ -116,10 +116,22 @@ void readHeaders(inFile& inputFile) {
     inputFile.header.optionalHdr = &inputFile.header.ntHdr->OptionalHeader;
     inputFile.header.sectionHdr  = IMAGE_FIRST_SECTION(inputFile.header.ntHdr);
 
-    if (!inputFile.header.dosHdr || !inputFile.header.ntHdr || !inputFile.header.sectionHdr) {
+    if (inputFile.header.dosHdr->e_magic != IMAGE_DOS_SIGNATURE || inputFile.header.ntHdr->Signature != IMAGE_NT_SIGNATURE) {
         console->report(LogLevel::error, "cant get headers info\n");
         return;
     }
+
+#ifdef _WIN64
+    if (inputFile.header.fileHdr->Machine != IMAGE_FILE_MACHINE_AMD64) {
+        console->report(LogLevel::error, "architecture mismatch\n");
+        return;
+    }
+#else
+    if (inputFile.header.fileHdr->Machine != IMAGE_FILE_MACHINE_I386) {
+        console->report(LogLevel::error, "architecture mismatch\n");
+        return;
+    }
+#endif  // _WIN64
 
     console->log(LogLevel::green, "[DOS info] -> 0x%X\n", inputFile.header.dosHdr);
     console->log("e_magic:  %X\n", inputFile.header.dosHdr->e_magic);
