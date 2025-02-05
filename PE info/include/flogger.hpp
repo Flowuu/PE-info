@@ -232,6 +232,6 @@ class FLog {
         FreeConsole();
     }
 };
-extern std::unique_ptr<FLog> console = std::make_unique<FLog>();
+extern std::unique_ptr<FLog> console = std::make_unique<FLog>("PE info");
 
 #endif  // !FLOGGER_HPP
