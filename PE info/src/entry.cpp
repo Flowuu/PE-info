@@ -75,8 +75,16 @@ void readReloc(PEHeaders& header) {
 
     console->log(LogLevel::lightcyan, "[Relocation Directory Table]\n");
 
-    for (int i = 0; relocDir->VirtualAddress != 0 && relocDir->SizeOfBlock != 0; i++) {
-        console->log("%d entry -> 0x%X (size %X)\n", i, relocDir->VirtualAddress, relocDir->SizeOfBlock);
+    for (int tableEntryCount = 0; relocDir->VirtualAddress != 0 && relocDir->SizeOfBlock != 0; tableEntryCount++) {
+        int numberOfEntry = static_cast<int>((relocDir->SizeOfBlock - sizeof(PIMAGE_BASE_RELOCATION)) / sizeof(WORD));
+        console->log("%d entry -> 0x%X (entry count %d)\n", tableEntryCount, relocDir->VirtualAddress, numberOfEntry);
+
+        for (int relocationEntryCount = 0; relocationEntryCount < numberOfEntry; relocationEntryCount++) {
+            PWORD relocationEntry = reinterpret_cast<PWORD>(relocDir + 0x1);
+
+            console->log("  %d entry -> 0x%X\n", relocationEntryCount, relocationEntry[relocationEntryCount]);
+        }
+        console->log("\n");
 
 #ifdef _WIN64
         relocDir = reinterpret_cast<PIMAGE_BASE_RELOCATION>(reinterpret_cast<uintptr_t>(relocDir) + relocDir->SizeOfBlock);
