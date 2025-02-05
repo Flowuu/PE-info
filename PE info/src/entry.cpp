@@ -79,9 +79,9 @@ void readReloc(PEHeaders& header) {
         console->log("%d entry -> 0x%X (size %X)\n", i, relocDir->VirtualAddress, relocDir->SizeOfBlock);
 
 #ifdef _WIN64
-        relocDir = (PIMAGE_BASE_RELOCATION)((uintptr_t)relocDir + relocDir->SizeOfBlock);
+        relocDir = reinterpret_cast<PIMAGE_BASE_RELOCATION>(reinterpret_cast<uintptr_t>(relocDir) + relocDir->SizeOfBlock);
 #else
-        relocDir = (PIMAGE_BASE_RELOCATION)((DWORD)relocDir + relocDir->SizeOfBlock);
+        relocDir = reinterpret_cast<PIMAGE_BASE_RELOCATION>(reinterpret_cast<DWORD>(relocDir) + relocDir->SizeOfBlock);
 #endif  // _WIN64
     }
 }
