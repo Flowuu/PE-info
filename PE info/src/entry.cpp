@@ -61,6 +61,31 @@ DWORD rvaToFileOffset(DWORD RVA, PIMAGE_NT_HEADERS& pNtHeader) {
 }
 #endif  // _WIN64
 
+void readReloc(PEHeaders& header) {
+    PIMAGE_BASE_RELOCATION relocDir;
+#ifdef _WIN64
+    relocDir = reinterpret_cast<PIMAGE_BASE_RELOCATION>(
+        reinterpret_cast<uintptr_t>(header.dosHdr) +
+        rvaToFileOffset(header.optionalHdr->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress, header.ntHdr));
+#else
+    relocDir = reinterpret_cast<PIMAGE_BASE_RELOCATION>(
+        reinterpret_cast<DWORD>(header.dosHdr) +
+        rvaToFileOffset(header.optionalHdr->DataDirectory[IMAGE_DIRECTORY_ENTRY_BASERELOC].VirtualAddress, header.ntHdr));
+#endif  // _WIN64
+
+    console->log(LogLevel::lightcyan, "[Relocation Directory Table]\n");
+
+    for (int i = 0; relocDir->VirtualAddress != 0 && relocDir->SizeOfBlock != 0; i++) {
+        console->log("%d entry -> 0x%X (size %X)\n", i, relocDir->VirtualAddress, relocDir->SizeOfBlock);
+
+#ifdef _WIN64
+        relocDir = (PIMAGE_BASE_RELOCATION)((uintptr_t)relocDir + relocDir->SizeOfBlock);
+#else
+        relocDir = (PIMAGE_BASE_RELOCATION)((DWORD)relocDir + relocDir->SizeOfBlock);
+#endif  // _WIN64
+    }
+}
+
 void readImports(PEHeaders& header) {
     PIMAGE_IMPORT_DESCRIPTOR importDesc;
 #ifdef _WIN64
@@ -170,6 +195,7 @@ void readHeaders(inFile& inputFile) {
     console->log("\n");
 
     readImports(inputFile.header);
+    readReloc(inputFile.header);
 }
 
 int main(int argc, char** argv) {
